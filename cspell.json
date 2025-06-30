@@ -1,0 +1,18 @@
+{
+  "version": "0.1",
+  "language": "en,ja",
+  "words": [
+    "gocui",
+    "lazynotion",
+    "NotionAPI",
+    "nvim"
+  ],
+  "files": [
+    "**/*.{go}"
+  ],
+  "ignorePaths": [],
+  "ignoreWords": [
+    "jomei",
+    "jroimartin"
+  ]
+}
