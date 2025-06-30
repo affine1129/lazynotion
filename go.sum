@@ -1,0 +1,10 @@
+github.com/jesseduffield/gocui v0.3.0 h1:l7wH8MKR2p+ozuZdtdhQiX7szILbv50vkMk1tg2+xow=
+github.com/jesseduffield/gocui v0.3.0/go.mod h1:2RtZznzYKt8RLRwvFiSkXjU0Ei8WwHdubgnlaYH47dw=
+github.com/jomei/notionapi v1.13.3 h1:pzEN+pVe1T0FjH85sP9TCqqe58rFRL+Fj+F5yvyBNw4=
+github.com/jomei/notionapi v1.13.3/go.mod h1:BqzP6JBddpBnXvMSIxiR5dCoCjKngmz5QNl1ONDlDoM=
+github.com/jroimartin/gocui v0.5.0 h1:DCZc97zY9dMnHXJSJLLmx9VqiEnAj0yh0eTNpuEtG/4=
+github.com/jroimartin/gocui v0.5.0/go.mod h1:l7Hz8DoYoL6NoYnlnaX6XCNR62G7J5FfSW5jEogzaxE=
+github.com/mattn/go-runewidth v0.0.9 h1:Lm995f3rfxdpd6TSmuVCHVb/QhupuXlYr8sCI/QdE+0=
+github.com/mattn/go-runewidth v0.0.9/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m2gUSrubnMI=
+github.com/nsf/termbox-go v1.1.1 h1:nksUPLCb73Q++DwbYUBEglYBRPZyoXJdrj5L+TkjyZY=
+github.com/nsf/termbox-go v1.1.1/go.mod h1:T0cTdVuOwf7pHQNtfhnEbzHbcNyCEcVU4YPpouCbVxo=
