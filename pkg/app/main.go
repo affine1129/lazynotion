@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -10,6 +10,19 @@ import (
 	"github.com/jomei/notionapi"
 	"github.com/jroimartin/gocui"
 )
+
+// BuildInfo holds version and build metadata injected via ldflags.
+type BuildInfo struct {
+	Commit      string
+	Date        string
+	Version     string
+	BuildSource string
+}
+
+// Start is the application entry point.
+func Start(info *BuildInfo) {
+	run()
+}
 
 type Block struct {
 	ID        string
@@ -32,9 +45,9 @@ type Database struct {
 
 var (
 	mockPages = []Page{
-		{Name: "Introduction", Content: "Welcome to the mock page."},
-		{Name: "Details", Content: "Here are some detailed contents."},
-		{Name: "Conclusion", Content: "Summary and closing remarks."},
+		{Name: "Introduction", Block: "Welcome to the mock page."},
+		{Name: "Details", Block: "Here are some detailed contents."},
+		{Name: "Conclusion", Block: "Summary and closing remarks."},
 	}
 
 	mockDBs = []Database{
@@ -50,7 +63,7 @@ var (
 		},
 		{
 			Name:      "Sample DB Three",
-			Pages:     []Page{{Name: "Only Page", Content: "Single page content."}},
+			Pages:     []Page{{Name: "Only Page", Block: "Single page content."}},
 			Collapsed: true,
 		},
 	}
@@ -65,7 +78,7 @@ type TreeNode struct {
 	PageIdx int  // index in Pages slice (if IsDB is false)
 }
 
-func main() {
+func run() {
 	// Initialize GUI
 	// g, err := gocui.NewGui(gocui.OutputNormal)
 	// if err != nil {
@@ -200,7 +213,7 @@ func layout(g *gocui.Gui) error {
 		if node.IsDB {
 			p.Write([]byte("<Database>: select a page and press Enter"))
 		} else {
-			p.Write([]byte(page.Content))
+			p.Write([]byte(page.Block))
 		}
 		g.SetCurrentView("tree")
 	}
@@ -241,7 +254,7 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	tmpname := tmpfile.Name()
-	tmpfile.WriteString(pg.Content)
+	tmpfile.WriteString(pg.Block)
 	tmpfile.Close()
 	defer os.Remove(tmpname)
 
@@ -269,7 +282,7 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	pg.Content = string(data)
+	pg.Block = string(data)
 
 	g.SetCurrentView("tree")
 	return nil
@@ -278,7 +291,7 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 // savePreview saves edited content back to mock data
 func savePreview(g *gocui.Gui, v *gocui.View) error {
 	n := treeNodes[selectedIndex]
-	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
+	mockDBs[n.DBIdx].Pages[n.PageIdx].Block = v.Buffer()
 	inEditor = false
 	g.SetCurrentView("tree")
 	return nil

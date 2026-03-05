@@ -20,5 +20,5 @@ func main() {
 		BuildSource: buildSource,
 	}
 
-	app.Start(ldFlagsBuildInfo, nil)
+	app.Start(ldFlagsBuildInfo)
 }
