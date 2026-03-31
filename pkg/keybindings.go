@@ -33,6 +33,13 @@ func SetKeyBindings(g *gocui.Gui) error {
 	if err := g.SetKeybinding("preview", gocui.KeyCtrlS, gocui.ModNone, savePreview); err != nil {
 		log.Panicln(err)
 	}
+	// scroll preview from tree view using arrow keys
+	if err := g.SetKeybinding("tree", gocui.KeyArrowDown, gocui.ModNone, scrollPreviewDown); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("tree", gocui.KeyArrowUp, gocui.ModNone, scrollPreviewUp); err != nil {
+		log.Panicln(err)
+	}
 	return nil
 }
 
@@ -58,6 +65,33 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 func cursorUp(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex > 0 {
 		selectedIndex--
+	}
+	return nil
+}
+
+// scrollPreviewDown scrolls the preview pane down by one line.
+func scrollPreviewDown(g *gocui.Gui, v *gocui.View) error {
+	p, err := g.View("preview")
+	if err != nil {
+		return err
+	}
+	_, oy := p.Origin()
+	_, ph := p.Size()
+	if oy+ph < len(p.BufferLines()) {
+		p.SetOrigin(0, oy+1)
+	}
+	return nil
+}
+
+// scrollPreviewUp scrolls the preview pane up by one line.
+func scrollPreviewUp(g *gocui.Gui, v *gocui.View) error {
+	p, err := g.View("preview")
+	if err != nil {
+		return err
+	}
+	_, oy := p.Origin()
+	if oy > 0 {
+		p.SetOrigin(0, oy-1)
 	}
 	return nil
 }

@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	selectedIndex int  = 0
-	inEditor      bool = false
-	treeNodes     []TreeNode
+	selectedIndex     int  = 0
+	inEditor          bool = false
+	treeNodes         []TreeNode
+	prevSelectedIndex int = -1 // tracks last selected index to reset preview scroll
 )
 
 type TreeNode struct {
@@ -37,6 +38,13 @@ func Layout(g *gocui.Gui) error {
 	v.Clear()
 	v.Title = "Databases"
 
+	_, viewHeight := v.Size()
+	origin := 0
+	if selectedIndex >= viewHeight {
+		origin = selectedIndex - viewHeight + 1
+	}
+	v.SetOrigin(0, origin)
+
 	for i, node := range treeNodes {
 		if node.IsDB {
 			db := d[node.DBIdx]
@@ -44,13 +52,13 @@ func Layout(g *gocui.Gui) error {
 			if !db.Collapsed {
 				prefix = "- "
 			}
-			fmt.Fprintf(v, "%s%s\n", prefix, db.Name)
+			fmt.Fprintf(v, "%s%s (%d)\n", prefix, db.Name, len(db.Pages))
 		} else {
 			fmt.Fprintf(v, "  %s\n", d[node.DBIdx].Pages[node.PageIdx].Name)
 		}
 		// Move cursor to selectedIndex
 		if i == selectedIndex {
-			v.SetCursor(0, i)
+			v.SetCursor(0, i-origin)
 		}
 	}
 
@@ -60,6 +68,7 @@ func Layout(g *gocui.Gui) error {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
+		p.Wrap = true // wrap long lines so content is not cut off
 	}
 	p.Title = "Preview"
 	node := treeNodes[selectedIndex]
@@ -70,10 +79,15 @@ func Layout(g *gocui.Gui) error {
 	} else {
 		p.Clear()
 		p.Editable = false
-		page := d[node.DBIdx].Pages[node.PageIdx]
+		// Reset scroll origin only when the selection changes
+		if prevSelectedIndex != selectedIndex {
+			p.SetOrigin(0, 0)
+			prevSelectedIndex = selectedIndex
+		}
 		if node.IsDB {
 			p.Write([]byte("<Database>: select a page and press Enter"))
 		} else {
+			page := d[node.DBIdx].Pages[node.PageIdx]
 			p.Write([]byte(page.Content))
 		}
 		g.SetCurrentView("tree")
