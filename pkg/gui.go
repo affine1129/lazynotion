@@ -7,8 +7,7 @@ import (
 )
 
 var (
-	selectedIndex int  = 0
-	inEditor      bool = false
+	selectedIndex int = 0
 	treeNodes     []TreeNode
 )
 
@@ -36,6 +35,24 @@ func Layout(g *gocui.Gui) error {
 	}
 	v.Clear()
 	v.Title = "Databases"
+
+	if len(treeNodes) == 0 {
+		fmt.Fprintln(v, "No databases found.")
+		fmt.Fprintln(v, "Share at least one database with your Notion integration.")
+
+		p, err := g.SetView("preview", maxX/3+1, 0, maxX-1, maxY-1)
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+		}
+		p.Clear()
+		p.Title = "Preview"
+		p.Editable = false
+		p.Write([]byte("No pages to preview."))
+		g.SetCurrentView("tree")
+		return nil
+	}
 
 	for _, node := range treeNodes {
 		if node.IsDB {
@@ -71,25 +88,19 @@ func Layout(g *gocui.Gui) error {
 	}
 	p.Title = "Preview"
 	node := treeNodes[selectedIndex]
-	if inEditor {
-		p.Editable = true
-		p.Editor = gocui.DefaultEditor
-		g.SetCurrentView("preview")
+	p.Clear()
+	p.Editable = false
+	if node.IsDB {
+		p.Write([]byte("<Database>: select a page and press Enter"))
 	} else {
-		p.Clear()
-		p.Editable = false
 		page := d[node.DBIdx].Pages[node.PageIdx]
-		if node.IsDB {
-			p.Write([]byte("<Database>: select a page and press Enter"))
-		} else {
+		if page.ContentLoaded {
 			p.Write([]byte(page.Content))
+		} else {
+			p.Write([]byte("Loading page content..."))
 		}
-		g.SetCurrentView("tree")
 	}
-
-	if !inEditor {
-		g.SetCurrentView("tree")
-	}
+	g.SetCurrentView("tree")
 
 	return nil
 }
@@ -105,16 +116,14 @@ func RebuildTreeNodes() {
 			}
 		}
 	}
+	if len(treeNodes) == 0 {
+		selectedIndex = 0
+		return
+	}
+	if selectedIndex < 0 {
+		selectedIndex = 0
+	}
 	if selectedIndex >= len(treeNodes) {
 		selectedIndex = len(treeNodes) - 1
 	}
-}
-
-// savePreview saves edited content back to mock data
-func savePreview(g *gocui.Gui, v *gocui.View) error {
-	n := treeNodes[selectedIndex]
-	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
-	inEditor = false
-	g.SetCurrentView("tree")
-	return nil
 }
