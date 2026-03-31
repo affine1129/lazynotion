@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/jomei/notionapi"
 )
@@ -103,7 +104,7 @@ func getPages(client *notionapi.Client, dbID notionapi.DatabaseID) ([]Page, erro
 	var pages []Page
 	for _, r := range resp.Results {
 		if title, ok := r.Properties["Name"].(*notionapi.TitleProperty); ok {
-			pages = append(pages, Page{Name: title.Title[0].PlainText})
+			pages = append(pages, Page{ID: r.ID.String(), Name: title.Title[0].PlainText})
 			// ここではページのブロックを取得する例
 			blocks, err := getBlocks(client, notionapi.PageID(r.ID))
 			if err != nil {
@@ -140,4 +141,125 @@ func getBlocks(client *notionapi.Client, pageID notionapi.PageID) ([]Block, erro
 	//   }
 	// }
 	// return blocks, nil
+}
+
+// UpdatePageMarkdown replaces the content of a Notion page with the provided markdown string.
+// It deletes all existing blocks on the page and appends new blocks parsed from the markdown.
+// Returns an error if any API call fails.
+func UpdatePageMarkdown(client *notionapi.Client, pageID string, markdown string) error {
+	ctx := context.Background()
+	bid := notionapi.BlockID(pageID)
+
+	// Step 1: 既存ブロックをすべて取得して削除
+	resp, err := client.Block.GetChildren(ctx, bid, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get blocks for page %s: %w", pageID, err)
+	}
+	for _, block := range resp.Results {
+		if _, err := client.Block.Delete(ctx, block.GetID()); err != nil {
+			log.Printf("failed to delete block %s: %v", block.GetID(), err)
+		}
+	}
+
+	// Step 2: Markdown をパースして Notion ブロックに変換
+	blocks := markdownToBlocks(markdown)
+	if len(blocks) == 0 {
+		return nil
+	}
+
+	// Step 3: 新しいブロックをページに追加
+	_, err = client.Block.AppendChildren(ctx, bid, &notionapi.AppendBlockChildrenRequest{
+		Children: blocks,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to append blocks to page %s: %w", pageID, err)
+	}
+
+	return nil
+}
+
+// richText は与えられたテキストから RichText スライスを生成するヘルパー関数
+func richText(content string) []notionapi.RichText {
+	return []notionapi.RichText{
+		{
+			Type: notionapi.ObjectTypeText,
+			Text: &notionapi.Text{Content: content},
+		},
+	}
+}
+
+// markdownToBlocks converts a markdown string to a slice of Notion Block objects.
+// Supported syntax: headings (#, ##, ###), bullet lists (- or *), numbered lists (1.), and paragraphs.
+func markdownToBlocks(markdown string) []notionapi.Block {
+	var blocks []notionapi.Block
+	lines := strings.Split(markdown, "\n")
+
+	for _, line := range lines {
+		// 空行はスキップ
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(trimmed, "### "):
+			text := strings.TrimPrefix(trimmed, "### ")
+			blocks = append(blocks, &notionapi.Heading3Block{
+				BasicBlock: notionapi.BasicBlock{Type: notionapi.BlockTypeHeading3},
+				Heading3:   notionapi.Heading{RichText: richText(text)},
+			})
+		case strings.HasPrefix(trimmed, "## "):
+			text := strings.TrimPrefix(trimmed, "## ")
+			blocks = append(blocks, &notionapi.Heading2Block{
+				BasicBlock: notionapi.BasicBlock{Type: notionapi.BlockTypeHeading2},
+				Heading2:   notionapi.Heading{RichText: richText(text)},
+			})
+		case strings.HasPrefix(trimmed, "# "):
+			text := strings.TrimPrefix(trimmed, "# ")
+			blocks = append(blocks, &notionapi.Heading1Block{
+				BasicBlock: notionapi.BasicBlock{Type: notionapi.BlockTypeHeading1},
+				Heading1:   notionapi.Heading{RichText: richText(text)},
+			})
+		case strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* "):
+			text := trimmed[2:]
+			blocks = append(blocks, &notionapi.BulletedListItemBlock{
+				BasicBlock:       notionapi.BasicBlock{Type: notionapi.BlockTypeBulletedListItem},
+				BulletedListItem: notionapi.ListItem{RichText: richText(text)},
+			})
+		default:
+			// 番号付きリスト: "数字. テキスト" の形式を検出
+			if text, ok := parseNumberedListItem(trimmed); ok {
+				blocks = append(blocks, &notionapi.NumberedListItemBlock{
+					BasicBlock:       notionapi.BasicBlock{Type: notionapi.BlockTypeNumberedListItem},
+					NumberedListItem: notionapi.ListItem{RichText: richText(text)},
+				})
+			} else {
+				blocks = append(blocks, &notionapi.ParagraphBlock{
+					BasicBlock: notionapi.BasicBlock{Type: notionapi.BlockTypeParagraph},
+					Paragraph:  notionapi.Paragraph{RichText: richText(trimmed)},
+				})
+			}
+		}
+	}
+
+	return blocks
+}
+
+// parseNumberedListItem detects lines of the form "N. text" (N = one or more digits)
+// and returns the text portion and true. Otherwise returns "", false.
+func parseNumberedListItem(s string) (string, bool) {
+	dot := strings.IndexByte(s, '.')
+	if dot <= 0 {
+		return "", false
+	}
+	prefix := s[:dot]
+	for _, r := range prefix {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	if len(s) <= dot+1 || s[dot+1] != ' ' {
+		return "", false
+	}
+	return strings.TrimSpace(s[dot+2:]), true
 }

@@ -21,14 +21,16 @@ func NewBlock(id, blockType, content string) Block {
 }
 
 type Page struct {
+	ID     string
 	Name   string
 	Blocks []Block
 	// for preview
 	Content string
 }
 
-func NewPage(name string, blocks []Block) Page {
+func NewPage(id, name string, blocks []Block) Page {
 	return Page{
+		ID:     id,
 		Name:   name,
 		Blocks: blocks,
 	}

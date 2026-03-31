@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/jroimartin/gocui"
 )
@@ -102,11 +103,22 @@ func RebuildTreeNodes() {
 	}
 }
 
-// savePreview saves edited content back to mock data
+// savePreview saves edited content back to mock data and, if the page has a
+// Notion page ID, updates the page content via the Notion API (replace-content).
 func savePreview(g *gocui.Gui, v *gocui.View) error {
 	n := treeNodes[selectedIndex]
-	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
+	content := v.Buffer()
+	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = content
 	inEditor = false
 	g.SetCurrentView("tree")
+
+	pageID := mockDBs[n.DBIdx].Pages[n.PageIdx].ID
+	if pageID != "" {
+		client := GetClient()
+		if err := UpdatePageMarkdown(client, pageID, content); err != nil {
+			log.Printf("failed to update page markdown for page %s: %v", pageID, err)
+		}
+	}
+
 	return nil
 }
