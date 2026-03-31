@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/jroimartin/gocui"
 	"github.com/mattn/go-runewidth"
@@ -31,10 +30,9 @@ func Layout(g *gocui.Gui) error {
 	// is also the divider between the two panes.
 	treeRight := maxX / 3
 
-	// treeWidth and previewWidth are the number of usable terminal columns
-	// inside each pane's frame (gocui Size() = x1 - x0 - 1).
+	// treeWidth is the number of usable terminal columns inside the tree
+	// pane's frame (gocui Size() = x1 - x0 - 1).
 	treeWidth := treeRight - 1
-	previewWidth := maxX - treeRight - 3
 
 	// Left pane: tree
 	v, err := g.SetView("tree", 0, 0, treeRight, maxY-1)
@@ -113,7 +111,7 @@ func Layout(g *gocui.Gui) error {
 	} else {
 		page := d[node.DBIdx].Pages[node.PageIdx]
 		if page.ContentLoaded {
-			p.Write([]byte(wrapText(page.Content, previewWidth)))
+			p.Write([]byte(page.Content))
 		} else {
 			p.Write([]byte("Loading page content..."))
 		}
@@ -148,45 +146,6 @@ func RebuildTreeNodes() {
 	if selectedIndex >= len(treeNodes) {
 		selectedIndex = len(treeNodes) - 1
 	}
-}
-
-// wrapText splits text into lines that fit within width terminal columns,
-// accounting for double-width Unicode characters (e.g. Japanese/Chinese).
-// Existing newlines are preserved; each logical line is wrapped independently.
-func wrapText(text string, width int) string {
-	if width <= 0 {
-		return text
-	}
-	lines := strings.Split(text, "\n")
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		out = append(out, wrapLine(line, width)...)
-	}
-	return strings.Join(out, "\n")
-}
-
-// wrapLine splits a single line into segments each no wider than width columns.
-func wrapLine(line string, width int) []string {
-	if runewidth.StringWidth(line) <= width {
-		return []string{line}
-	}
-	var result []string
-	colWidth := 0
-	lineStart := 0
-	for i, r := range line {
-		w := runewidth.RuneWidth(r)
-		// Only wrap if the current line is non-empty; this avoids producing an
-		// empty leading segment when the very first character exceeds width.
-		if colWidth > 0 && colWidth+w > width {
-			result = append(result, line[lineStart:i])
-			lineStart = i
-			colWidth = w
-		} else {
-			colWidth += w
-		}
-	}
-	result = append(result, line[lineStart:])
-	return result
 }
 
 // truncateName shortens name so its visual width does not exceed maxWidth
