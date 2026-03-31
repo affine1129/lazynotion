@@ -102,10 +102,10 @@ func RebuildTreeNodes() {
 	}
 }
 
-// savePreview saves edited content back to mock data
+// savePreview saves edited content back to the in-memory database state.
 func savePreview(g *gocui.Gui, v *gocui.View) error {
 	n := treeNodes[selectedIndex]
-	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
+	databases[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
 	inEditor = false
 	g.SetCurrentView("tree")
 	return nil

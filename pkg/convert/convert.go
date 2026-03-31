@@ -30,11 +30,11 @@ import (
 //
 // Consecutive numbered-list items are automatically numbered starting from 1;
 // the counter resets whenever a non-numbered-list block appears.
-func BlocksToMarkdown(blocks []notionapi.Block) string {
+func BlocksToMarkdown(blocks notionapi.Blocks) string {
 	return blocksToMarkdown(blocks, 0)
 }
 
-func blocksToMarkdown(blocks []notionapi.Block, depth int) string {
+func blocksToMarkdown(blocks notionapi.Blocks, depth int) string {
 	var sb strings.Builder
 	numberedListCounter := 0
 

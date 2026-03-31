@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/jroimartin/gocui"
@@ -18,7 +17,7 @@ func Run() {
 	client := GetClient()
 	databases, err := GetDatabases(client)
 	if err != nil {
-		fmt.Errorf("failed to query database: %w", err)
+		log.Fatalf("failed to fetch databases: %v", err)
 	}
 
 	SetDatabase(databases)
