@@ -1,0 +1,15 @@
+{
+  "name": "lazynotion",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.24",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  },
+  "postCreateCommand": "go mod download",
+  "remoteEnv": {
+    "NOTION_TOKEN": "${localEnv:NOTION_TOKEN}"
+  }
+}
