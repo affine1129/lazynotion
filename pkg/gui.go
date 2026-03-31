@@ -54,7 +54,7 @@ func Layout(g *gocui.Gui) error {
 		return nil
 	}
 
-	for i, node := range treeNodes {
+	for _, node := range treeNodes {
 		if node.IsDB {
 			db := d[node.DBIdx]
 			prefix := "+ "
@@ -65,11 +65,19 @@ func Layout(g *gocui.Gui) error {
 		} else {
 			fmt.Fprintf(v, "  %s\n", d[node.DBIdx].Pages[node.PageIdx].Name)
 		}
-		// Move cursor to selectedIndex
-		if i == selectedIndex {
-			v.SetCursor(0, i)
-		}
 	}
+
+	// Scroll the view so that selectedIndex is always visible, then place
+	// the cursor at the correct position within the visible area.
+	_, viewHeight := v.Size()
+	_, oy := v.Origin()
+	if selectedIndex < oy {
+		oy = selectedIndex
+	} else if selectedIndex >= oy+viewHeight {
+		oy = selectedIndex - viewHeight + 1
+	}
+	v.SetOrigin(0, oy)
+	v.SetCursor(0, selectedIndex-oy)
 
 	// Right pane: preview
 	p, err := g.SetView("preview", maxX/3+1, 0, maxX-1, maxY-1)
