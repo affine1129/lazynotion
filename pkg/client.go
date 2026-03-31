@@ -20,26 +20,29 @@ var (
 	}
 
 	mockPages = []Page{
-		{Name: "Introduction", Blocks: []Block{mockBlocks[0], mockBlocks[1]}, Content: "This is the introduction page."},
-		{Name: "Details", Blocks: []Block{mockBlocks[2], mockBlocks[3]}},
-		{Name: "Conclusion", Blocks: []Block{mockBlocks[4]}},
+		{Name: "Introduction", Blocks: []Block{mockBlocks[0], mockBlocks[1]}, Content: "This is the introduction page.", ContentLoaded: true},
+		{Name: "Details", Blocks: []Block{mockBlocks[2], mockBlocks[3]}, ContentLoaded: true},
+		{Name: "Conclusion", Blocks: []Block{mockBlocks[4]}, ContentLoaded: true},
 	}
 
 	mockDBs = []Database{
 		{
-			Name:      "Sample DB One",
-			Pages:     []Page{mockPages[0], mockPages[1]},
-			Collapsed: false,
+			Name:        "Sample DB One",
+			Pages:       []Page{mockPages[0], mockPages[1]},
+			Collapsed:   false,
+			PagesLoaded: true,
 		},
 		{
-			Name:      "Sample DB Two",
-			Pages:     []Page{mockPages[1], mockPages[2]},
-			Collapsed: true,
+			Name:        "Sample DB Two",
+			Pages:       []Page{mockPages[1], mockPages[2]},
+			Collapsed:   true,
+			PagesLoaded: true,
 		},
 		{
-			Name:      "Sample DB Three",
-			Pages:     []Page{mockPages[0], mockPages[2]},
-			Collapsed: true,
+			Name:        "Sample DB Three",
+			Pages:       []Page{mockPages[0], mockPages[2]},
+			Collapsed:   true,
+			PagesLoaded: true,
 		},
 	}
 )
@@ -55,9 +58,9 @@ func GetClient() *notionapi.Client {
 	return notionapi.NewClient(notionapi.Token(token))
 }
 
-// GetDatabases fetches all databases visible to the integration. When client
-// is nil (no token configured) it falls back to mock data so the app remains
-// usable during development.
+// GetDatabases fetches the database list visible to the integration. Page and
+// block content are loaded lazily when the user expands a database or selects a
+// page.
 func GetDatabases(client *notionapi.Client) ([]Database, error) {
 	if client == nil {
 		log.Println("NOTION_TOKEN not set – using mock data")
@@ -85,17 +88,22 @@ func GetDatabases(client *notionapi.Client) ([]Database, error) {
 		if len(db.Title) > 0 {
 			title = db.Title[0].PlainText
 		}
-		pages, err := getPages(client, notionapi.DatabaseID(db.ID))
-		if err != nil {
-			return nil, fmt.Errorf("failed to get pages for database %q: %w", title, err)
-		}
-		dbs = append(dbs, Database{Name: title, Pages: pages})
+		dbs = append(dbs, Database{
+			ID:          notionapi.DatabaseID(db.ID),
+			Name:        title,
+			Collapsed:   true,
+			PagesLoaded: false,
+		})
 	}
 
 	return dbs, nil
 }
 
-func getPages(client *notionapi.Client, dbID notionapi.DatabaseID) ([]Page, error) {
+func FetchPages(client *notionapi.Client, dbID notionapi.DatabaseID) ([]Page, error) {
+	if client == nil {
+		return nil, nil
+	}
+
 	resp, err := client.Database.Query(context.Background(), dbID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database %s: %w", dbID, err)
@@ -104,17 +112,24 @@ func getPages(client *notionapi.Client, dbID notionapi.DatabaseID) ([]Page, erro
 	var pages []Page
 	for _, r := range resp.Results {
 		title := getPageTitle(r)
-		blocks, err := getBlocks(client, notionapi.PageID(r.ID))
-		if err != nil {
-			return nil, fmt.Errorf("failed to get blocks for page %s: %w", r.ID, err)
-		}
-		content := ""
-		for _, b := range blocks {
-			content += b.Content + "\n"
-		}
-		pages = append(pages, Page{Name: title, Blocks: blocks, Content: content})
+		pages = append(pages, Page{Name: title, ID: notionapi.PageID(r.ID)})
 	}
+
 	return pages, nil
+}
+
+func LoadPages(client *notionapi.Client, db *Database) error {
+	if db == nil || db.PagesLoaded || client == nil {
+		return nil
+	}
+
+	pages, err := FetchPages(client, db.ID)
+	if err != nil {
+		return err
+	}
+	db.Pages = pages
+	db.PagesLoaded = true
+	return nil
 }
 
 // getPageTitle finds the title-type property of a Notion page regardless of
@@ -128,6 +143,40 @@ func getPageTitle(p notionapi.Page) string {
 		}
 	}
 	return "Untitled"
+}
+
+func LoadPageContent(client *notionapi.Client, page *Page) error {
+	if page == nil || page.ContentLoaded || client == nil {
+		return nil
+	}
+
+	blocks, content, err := FetchPageContent(client, page.ID)
+	if err != nil {
+		return err
+	}
+
+	page.Blocks = blocks
+	page.Content = content
+	page.ContentLoaded = true
+	return nil
+}
+
+func FetchPageContent(client *notionapi.Client, pageID notionapi.PageID) ([]Block, string, error) {
+	if client == nil {
+		return nil, "", nil
+	}
+
+	blocks, err := getBlocks(client, pageID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	content := ""
+	for _, b := range blocks {
+		content += b.Content + "\n"
+	}
+
+	return blocks, content, nil
 }
 
 func getBlocks(client *notionapi.Client, pageID notionapi.PageID) ([]Block, error) {

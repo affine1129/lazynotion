@@ -5,9 +5,10 @@ A terminal UI for browsing and editing Notion databases — inspired by [lazygit
 ## Features
 
 - Browse Notion databases and pages in a two-pane terminal UI
+- Load database pages and page content on demand to keep startup fast
 - Navigate with Vim-style keys (`j` / `k`)
 - Collapse and expand databases with `Enter`
-- Open pages for editing in Neovim with `e`
+- Open pages for editing in Vim/Neovim with `e`
 - Convert Notion API block objects to Markdown (`pkg/convert`)
 
 ## Requirements
@@ -38,10 +39,12 @@ go run ./pkg/
 | `j`        | Move cursor down                    |
 | `k`        | Move cursor up                      |
 | `Enter`    | Toggle database collapsed/expanded  |
-| `e`        | Open page in Neovim for editing     |
-| `Ctrl+S`   | Save edited content (preview pane)  |
+| `e`        | Open page in Vim/Neovim for editing |
 | `q`        | Quit                                |
 | `Ctrl+C`   | Quit                                |
+
+Edits are saved by your external editor. Use `:w` to write changes and `:wq`
+to write and return to LazyNotion.
 
 ## Package: `pkg/convert`
 
