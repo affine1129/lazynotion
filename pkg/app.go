@@ -8,6 +8,10 @@ import (
 )
 
 func Run() {
+	if err := loadEnv(); err != nil {
+		log.Fatalf("failed to load environment: %v", err)
+	}
+
 	client := GetClient()
 	databases, err := GetDatabases(client)
 	if err != nil {

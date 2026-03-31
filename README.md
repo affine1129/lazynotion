@@ -23,14 +23,18 @@ A terminal UI for browsing and editing Notion databases — inspired by [lazygit
 git clone https://github.com/affine1129/lazynotion
 cd lazynotion
 
-# Set your Notion integration token (optional — mock data is used when absent)
-export NOTION_TOKEN="secret_..."
+# Configure your Notion integration token (optional — mock data is used when absent)
+cp .env.example .env
+# Edit .env and set NOTION_TOKEN=secret_...
 
 # Run
 ./exec.sh
 # or
 go run ./pkg/
 ```
+
+`.env` is loaded automatically on startup, so values such as `NOTION_TOKEN`
+are available without running `export` manually.
 
 ## Key Bindings
 
