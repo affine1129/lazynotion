@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	selectedIndex int = 0
-	treeNodes     []TreeNode
+	selectedIndex  int = 0
+	treeNodes      []TreeNode
+	previewOriginY int = 0
 )
 
 type TreeNode struct {
@@ -45,6 +46,7 @@ func Layout(g *gocui.Gui) error {
 			if err != gocui.ErrUnknownView {
 				return err
 			}
+			p.Wrap = true
 		}
 		p.Clear()
 		p.Title = "Preview"
@@ -85,6 +87,7 @@ func Layout(g *gocui.Gui) error {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
+		p.Wrap = true
 	}
 	p.Title = "Preview"
 	node := treeNodes[selectedIndex]
@@ -100,6 +103,10 @@ func Layout(g *gocui.Gui) error {
 			p.Write([]byte("Loading page content..."))
 		}
 	}
+	if previewOriginY > previewMaxOriginY(p) {
+		previewOriginY = previewMaxOriginY(p)
+	}
+	p.SetOrigin(0, previewOriginY)
 	g.SetCurrentView("tree")
 
 	return nil
