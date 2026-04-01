@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jroimartin/gocui"
 	"github.com/mattn/go-runewidth"
@@ -77,9 +78,9 @@ func Layout(g *gocui.Gui) error {
 			if !db.Collapsed {
 				prefix = "- "
 			}
-			fmt.Fprintf(v, "%s%s\n", prefix, truncateName(db.Name, nameWidth))
+			fmt.Fprintf(v, "%s%s\n", prefix, padWideRunes(truncateName(db.Name, nameWidth)))
 		} else {
-			fmt.Fprintf(v, "  %s\n", truncateName(d[node.DBIdx].Pages[node.PageIdx].Name, nameWidth))
+			fmt.Fprintf(v, "  %s\n", padWideRunes(truncateName(d[node.DBIdx].Pages[node.PageIdx].Name, nameWidth)))
 		}
 	}
 
@@ -111,7 +112,7 @@ func Layout(g *gocui.Gui) error {
 	} else {
 		page := d[node.DBIdx].Pages[node.PageIdx]
 		if page.ContentLoaded {
-			p.Write([]byte(page.Content))
+			p.Write([]byte(padWideRunes(page.Content)))
 		} else {
 			p.Write([]byte("Loading page content..."))
 		}
@@ -163,4 +164,20 @@ func truncateName(name string, maxWidth int) string {
 		width += w
 	}
 	return name
+}
+
+// padWideRunes inserts a space after each double-width rune (CJK characters)
+// so that gocui's single-cell-per-rune renderer allocates two cells per wide
+// character, matching the two terminal columns the character actually occupies.
+// The inserted spaces are consumed as "continuation cells" by termbox's flush
+// loop and are never visible on screen.
+func padWideRunes(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		b.WriteRune(r)
+		if runewidth.RuneWidth(r) == 2 {
+			b.WriteByte(' ')
+		}
+	}
+	return b.String()
 }
