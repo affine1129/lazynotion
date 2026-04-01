@@ -30,6 +30,13 @@ func SetKeyBindings(g *gocui.Gui) error {
 	if err := g.SetKeybinding("tree", 'e', gocui.ModNone, toggleEdit); err != nil {
 		log.Panicln(err)
 	}
+	// scroll preview pane
+	if err := g.SetKeybinding("tree", 'J', gocui.ModNone, scrollPreviewDown); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("tree", 'K', gocui.ModNone, scrollPreviewUp); err != nil {
+		log.Panicln(err)
+	}
 	return nil
 }
 
@@ -55,6 +62,7 @@ func toggleDB(g *gocui.Gui, v *gocui.View) error {
 func cursorDown(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex < len(treeNodes)-1 {
 		selectedIndex++
+		previewOriginY = 0
 	}
 	return nil
 }
@@ -62,6 +70,7 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 func cursorUp(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex > 0 {
 		selectedIndex--
+		previewOriginY = 0
 	}
 	return nil
 }
@@ -69,6 +78,41 @@ func cursorUp(g *gocui.Gui, v *gocui.View) error {
 // quit handler
 func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
+}
+
+// previewMaxOriginY returns the maximum scroll offset for the preview pane.
+func previewMaxOriginY(p *gocui.View) int {
+	_, pvHeight := p.Size()
+	totalLines := len(p.BufferLines())
+	max := totalLines - pvHeight
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func scrollPreviewDown(g *gocui.Gui, v *gocui.View) error {
+	p, err := g.View("preview")
+	if err != nil {
+		return nil
+	}
+	if previewOriginY < previewMaxOriginY(p) {
+		previewOriginY++
+		p.SetOrigin(0, previewOriginY)
+	}
+	return nil
+}
+
+func scrollPreviewUp(g *gocui.Gui, v *gocui.View) error {
+	if previewOriginY > 0 {
+		previewOriginY--
+		p, err := g.View("preview")
+		if err != nil {
+			return nil
+		}
+		p.SetOrigin(0, previewOriginY)
+	}
+	return nil
 }
 
 func pickEditor() (string, error) {
