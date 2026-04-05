@@ -12,6 +12,15 @@ var (
 	selectedIndex  int = 0
 	treeNodes      []TreeNode
 	previewOriginY int = 0
+	spinnerFrame   int = 0
+)
+
+var spinnerFrames = []string{"|", "/", "-", "\\"}
+
+const (
+	prefixCollapsed = "+ "
+	prefixExpanded  = "- "
+	prefixPage      = "  "
 )
 
 type TreeNode struct {
@@ -74,13 +83,17 @@ func Layout(g *gocui.Gui) error {
 	for _, node := range treeNodes {
 		if node.IsDB {
 			db := d[node.DBIdx]
-			prefix := "+ "
-			if !db.Collapsed {
-				prefix = "- "
+			var prefix string
+			if db.Loading {
+				prefix = spinnerFrames[spinnerFrame%len(spinnerFrames)] + " "
+			} else if db.Collapsed {
+				prefix = prefixCollapsed
+			} else {
+				prefix = prefixExpanded
 			}
 			fmt.Fprintf(v, "%s%s\n", prefix, padWideRunes(truncateName(db.Name, nameWidth)))
 		} else {
-			fmt.Fprintf(v, "  %s\n", padWideRunes(truncateName(d[node.DBIdx].Pages[node.PageIdx].Name, nameWidth)))
+			fmt.Fprintf(v, "%s%s\n", prefixPage, padWideRunes(truncateName(d[node.DBIdx].Pages[node.PageIdx].Name, nameWidth)))
 		}
 	}
 

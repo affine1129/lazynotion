@@ -45,6 +45,7 @@ type Database struct {
 	Pages       []Page
 	Collapsed   bool
 	PagesLoaded bool
+	Loading     bool // true while pages are being fetched for the first time
 }
 
 func NewDatabase(name string, pages []Page, collapsed bool) Database {
