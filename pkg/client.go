@@ -1,13 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 
-	"github.com/affine1129/lazynotion/pkg/convert"
 	"github.com/jomei/notionapi"
+)
+
+const (
+	notionAPIURL     = "https://api.notion.com/v1"
+	notionAPIVersion = "2026-03-11"
 )
 
 var (
@@ -180,14 +188,90 @@ func FetchPageContent(client *notionapi.Client, pageID notionapi.PageID) ([]Bloc
 }
 
 func getBlocks(client *notionapi.Client, pageID notionapi.PageID) ([]Block, error) {
-	resp, err := client.Block.GetChildren(context.Background(), notionapi.BlockID(pageID), nil)
+	md, err := fetchPageMarkdown(client.Token.String(), pageID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get blocks for page %s: %w", pageID, err)
+		return nil, err
 	}
-
-	md := convert.BlocksToMarkdown(resp.Results)
 	if md == "" {
 		return nil, nil
 	}
 	return []Block{{Content: md}}, nil
+}
+
+// fetchPageMarkdown retrieves the content of a Notion page as Markdown using
+// the GET /v1/pages/{page_id}/markdown endpoint.
+func fetchPageMarkdown(token string, pageID notionapi.PageID) (string, error) {
+	url := fmt.Sprintf("%s/pages/%s/markdown", notionAPIURL, pageID)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Notion-Version", notionAPIVersion)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve page markdown for %s: %w", pageID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("retrieve page markdown returned status %d: %s", resp.StatusCode, body)
+	}
+
+	var result struct {
+		Markdown string `json:"markdown"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode page markdown response: %w", err)
+	}
+	return result.Markdown, nil
+}
+
+// UpdatePageMarkdown replaces the content of a Notion page with the provided
+// markdown string using the PATCH /v1/pages/{page_id}/markdown endpoint with
+// the replace_content action.
+func UpdatePageMarkdown(client *notionapi.Client, pageID notionapi.PageID, markdown string) error {
+	if client == nil {
+		return nil
+	}
+
+	type replaceContent struct {
+		NewStr string `json:"new_str"`
+	}
+	type requestBody struct {
+		Type           string         `json:"type"`
+		ReplaceContent replaceContent `json:"replace_content"`
+	}
+
+	body, err := json.Marshal(requestBody{
+		Type:           "replace_content",
+		ReplaceContent: replaceContent{NewStr: markdown},
+	})
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/pages/%s/markdown", notionAPIURL, pageID)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+client.Token.String())
+	req.Header.Set("Notion-Version", notionAPIVersion)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update page markdown for %s: %w", pageID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("update page markdown returned status %d: %s", resp.StatusCode, respBody)
+	}
+
+	return nil
 }

@@ -231,6 +231,14 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 	}
 	pg.Content = string(data)
 
+	// Notion API でページコンテンツを更新 (replace-content)
+	if pg.ID != "" {
+		client := GetClient()
+		if err := UpdatePageMarkdown(client, pg.ID, pg.Content); err != nil {
+			log.Printf("failed to update page markdown for page %s: %v", pg.ID, err)
+		}
+	}
+
 	g.SetCurrentView("tree")
 	return nil
 }
