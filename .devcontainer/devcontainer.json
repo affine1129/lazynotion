@@ -8,8 +8,5 @@
       ]
     }
   },
-  "postCreateCommand": "go mod download",
-  "remoteEnv": {
-    "NOTION_TOKEN": "${localEnv:NOTION_TOKEN}"
-  }
+  "postCreateCommand": "go mod download"
 }
