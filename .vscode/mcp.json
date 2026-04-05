@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "notionApi": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@notionhq/notion-mcp-server"
+      ],
+      "env": {
+        "PATH": "/home/linuxbrew/.linuxbrew/bin:${env:PATH}",
+        "NOTION_TOKEN": "${env:COPILOT_MCP_NOTION_API_KEY}"
+      }
+    }
+  }
+}
