@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/jroimartin/gocui"
 )
@@ -40,7 +41,9 @@ func SetKeyBindings(g *gocui.Gui) error {
 	return nil
 }
 
-// toggleDB toggles the collapsed state of a Database node
+// toggleDB toggles the collapsed state of a Database node.
+// On the first expansion, pages are fetched asynchronously and a spinner
+// animation is shown while loading is in progress.
 func toggleDB(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex < 0 || selectedIndex >= len(treeNodes) {
 		return nil
@@ -49,12 +52,55 @@ func toggleDB(g *gocui.Gui, v *gocui.View) error {
 	if node.IsDB {
 		d := GetDatabase()
 		db := &d[node.DBIdx]
-		if db.Collapsed && !db.PagesLoaded {
-			if err := LoadPages(GetClient(), db); err != nil {
-				return err
-			}
+		if db.Collapsed && !db.PagesLoaded && !db.Loading {
+			// Start async page loading with spinner animation.
+			dbIdx := node.DBIdx
+			dbID := db.ID
+			db.Loading = true
+			db.Collapsed = false
+			go func() {
+				stopSpinner := make(chan struct{})
+				// Advance the spinner frame at regular intervals.
+				go func() {
+					ticker := time.NewTicker(150 * time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-ticker.C:
+							g.Update(func(*gocui.Gui) error {
+								spinnerFrame++
+								return nil
+							})
+						case <-stopSpinner:
+							return
+						}
+					}
+				}()
+
+				pages, err := FetchPages(GetClient(), dbID)
+				close(stopSpinner)
+
+				g.Update(func(*gocui.Gui) error {
+					d := GetDatabase()
+					if dbIdx >= len(d) {
+						return nil
+					}
+					db := &d[dbIdx]
+					db.Loading = false
+					if err != nil {
+						// Restore collapsed state so the user can retry.
+						db.Collapsed = true
+						log.Printf("failed to load pages for database %s: %v", dbID, err)
+						return nil
+					}
+					db.Pages = pages
+					db.PagesLoaded = true
+					return nil
+				})
+			}()
+		} else if !db.Loading {
+			db.Collapsed = !db.Collapsed
 		}
-		db.Collapsed = !db.Collapsed
 	}
 	return nil
 }
