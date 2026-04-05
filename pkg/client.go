@@ -15,7 +15,7 @@ import (
 
 const (
 	notionAPIURL     = "https://api.notion.com/v1"
-	notionAPIVersion = "2022-06-28"
+	notionAPIVersion = "2026-03-11"
 )
 
 var (
