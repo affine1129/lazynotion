@@ -8,7 +8,7 @@ A terminal UI for browsing and editing Notion databases — inspired by [lazygit
 - Load database pages and page content on demand to keep startup fast
 - Navigate with Vim-style keys (`j` / `k`)
 - Collapse and expand databases with `Enter`
-- Open pages for editing in Vim/Neovim with `e`
+- Open pages for editing in Neovim/Vim/vi with `e`
 - Convert Notion API block objects to Markdown (`pkg/convert`)
 
 ## Requirements
@@ -43,7 +43,7 @@ are available without running `export` manually.
 | `j`        | Move cursor down                    |
 | `k`        | Move cursor up                      |
 | `Enter`    | Toggle database collapsed/expanded  |
-| `e`        | Open page in Vim/Neovim for editing |
+| `e`        | Open page in Neovim/Vim/vi for editing |
 | `q`        | Quit                                |
 | `Ctrl+C`   | Quit                                |
 

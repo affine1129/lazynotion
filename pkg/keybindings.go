@@ -122,7 +122,10 @@ func pickEditor() (string, error) {
 	if _, err := exec.LookPath("vim"); err == nil {
 		return "vim", nil
 	}
-	return "", fmt.Errorf("no supported editor found: install nvim or vim")
+	if _, err := exec.LookPath("vi"); err == nil {
+		return "vi", nil
+	}
+	return "", fmt.Errorf("no supported editor found: install nvim, vim, or vi")
 }
 
 // toggleEdit opens the selected page in the configured editor.
