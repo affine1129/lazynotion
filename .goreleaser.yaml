@@ -1,0 +1,49 @@
+version: 2
+
+project_name: lazynotion
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lazynotion
+    main: ./pkg
+    binary: lazynotion
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - name: lazynotion
+    homepage: https://github.com/affine1129/lazynotion
+    description: A terminal UI for browsing and editing Notion pages.
+    license: MIT
+    repository:
+      owner: affine1129
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    install: |
+      bin.install "lazynotion"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/lazynotion --version")
+
+changelog:
+  disable: true

@@ -33,6 +33,25 @@ cp .env.example .env
 go run ./pkg/
 ```
 
+## Install via Homebrew
+
+```sh
+# One-time: add tap
+brew tap affine1129/lazynotion
+
+# Install
+brew install lazynotion
+```
+
+To publish Homebrew updates automatically on release tags:
+
+1. Create a tap repository: `affine1129/homebrew-lazynotion`
+2. Add a fine-grained GitHub token as repository secret:
+	`HOMEBREW_TAP_GITHUB_TOKEN`
+3. Push a version tag (e.g. `v0.1.0`) to trigger release workflow
+
+The workflow uses `.goreleaser.yaml` and updates the formula in your tap repo.
+
 `.env` is loaded automatically on startup, so values such as `NOTION_TOKEN`
 are available without running `export` manually.
 
