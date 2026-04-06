@@ -2,14 +2,25 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jroimartin/gocui"
+	"github.com/mattn/go-runewidth"
 )
 
 var (
-	selectedIndex int  = 0
-	inEditor      bool = false
-	treeNodes     []TreeNode
+	selectedIndex  int = 0
+	treeNodes      []TreeNode
+	previewOriginY int = 0
+	spinnerFrame   int = 0
+)
+
+var spinnerFrames = []string{"|", "/", "-", "\\"}
+
+const (
+	prefixCollapsed = "+ "
+	prefixExpanded  = "- "
+	prefixPage      = "  "
 )
 
 type TreeNode struct {
@@ -25,8 +36,16 @@ func Layout(g *gocui.Gui) error {
 
 	RebuildTreeNodes()
 
+	// treeRight is the x-coordinate of the tree pane's right border, which
+	// is also the divider between the two panes.
+	treeRight := maxX / 3
+
+	// treeWidth is the number of usable terminal columns inside the tree
+	// pane's frame (gocui Size() = x1 - x0 - 1).
+	treeWidth := treeRight - 1
+
 	// Left pane: tree
-	v, err := g.SetView("tree", 0, 0, maxX/3, maxY-1)
+	v, err := g.SetView("tree", 0, 0, treeRight, maxY-1)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -37,25 +56,61 @@ func Layout(g *gocui.Gui) error {
 	v.Clear()
 	v.Title = "Databases"
 
-	for i, node := range treeNodes {
+	if len(treeNodes) == 0 {
+		fmt.Fprintln(v, "No databases found.")
+		fmt.Fprintln(v, "Share at least one database with your Notion integration.")
+
+		p, err := g.SetView("preview", treeRight+1, 0, maxX-1, maxY-1)
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+		}
+		p.Clear()
+		p.Title = "Preview"
+		p.Editable = false
+		p.Write([]byte("No pages to preview."))
+		g.SetCurrentView("tree")
+		return nil
+	}
+
+	// nameWidth is the max visual width for a DB/page name: prefix is always
+	// 2 ASCII chars ("+ ", "- ", "  "), leaving the rest for the name.
+	nameWidth := treeWidth - 2
+	if nameWidth < 1 {
+		nameWidth = 1
+	}
+	for _, node := range treeNodes {
 		if node.IsDB {
 			db := d[node.DBIdx]
-			prefix := "+ "
-			if !db.Collapsed {
-				prefix = "- "
+			var prefix string
+			if db.Loading {
+				prefix = spinnerFrames[spinnerFrame%len(spinnerFrames)] + " "
+			} else if db.Collapsed {
+				prefix = prefixCollapsed
+			} else {
+				prefix = prefixExpanded
 			}
-			fmt.Fprintf(v, "%s%s\n", prefix, db.Name)
+			fmt.Fprintf(v, "%s%s\n", prefix, padWideRunes(truncateName(db.Name, nameWidth)))
 		} else {
-			fmt.Fprintf(v, "  %s\n", d[node.DBIdx].Pages[node.PageIdx].Name)
-		}
-		// Move cursor to selectedIndex
-		if i == selectedIndex {
-			v.SetCursor(0, i)
+			fmt.Fprintf(v, "%s%s\n", prefixPage, padWideRunes(truncateName(d[node.DBIdx].Pages[node.PageIdx].Name, nameWidth)))
 		}
 	}
 
+	// Scroll the view so that selectedIndex is always visible, then place
+	// the cursor at the correct position within the visible area.
+	_, viewHeight := v.Size()
+	_, oy := v.Origin()
+	if selectedIndex < oy {
+		oy = selectedIndex
+	} else if selectedIndex >= oy+viewHeight {
+		oy = selectedIndex - viewHeight + 1
+	}
+	v.SetOrigin(0, oy)
+	v.SetCursor(0, selectedIndex-oy)
+
 	// Right pane: preview
-	p, err := g.SetView("preview", maxX/3+1, 0, maxX-1, maxY-1)
+	p, err := g.SetView("preview", treeRight+1, 0, maxX-1, maxY-1)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -63,25 +118,23 @@ func Layout(g *gocui.Gui) error {
 	}
 	p.Title = "Preview"
 	node := treeNodes[selectedIndex]
-	if inEditor {
-		p.Editable = true
-		p.Editor = gocui.DefaultEditor
-		g.SetCurrentView("preview")
+	p.Clear()
+	p.Editable = false
+	if node.IsDB {
+		p.Write([]byte("<Database>: select a page and press Enter"))
 	} else {
-		p.Clear()
-		p.Editable = false
 		page := d[node.DBIdx].Pages[node.PageIdx]
-		if node.IsDB {
-			p.Write([]byte("<Database>: select a page and press Enter"))
+		if page.ContentLoaded {
+			p.Write([]byte(padWideRunes(page.Content)))
 		} else {
-			p.Write([]byte(page.Content))
+			p.Write([]byte("Loading page content..."))
 		}
-		g.SetCurrentView("tree")
 	}
-
-	if !inEditor {
-		g.SetCurrentView("tree")
+	if previewOriginY > previewMaxOriginY(p) {
+		previewOriginY = previewMaxOriginY(p)
 	}
+	p.SetOrigin(0, previewOriginY)
+	g.SetCurrentView("tree")
 
 	return nil
 }
@@ -97,16 +150,47 @@ func RebuildTreeNodes() {
 			}
 		}
 	}
+	if len(treeNodes) == 0 {
+		selectedIndex = 0
+		return
+	}
+	if selectedIndex < 0 {
+		selectedIndex = 0
+	}
 	if selectedIndex >= len(treeNodes) {
 		selectedIndex = len(treeNodes) - 1
 	}
 }
 
-// savePreview saves edited content back to mock data
-func savePreview(g *gocui.Gui, v *gocui.View) error {
-	n := treeNodes[selectedIndex]
-	mockDBs[n.DBIdx].Pages[n.PageIdx].Content = v.Buffer()
-	inEditor = false
-	g.SetCurrentView("tree")
-	return nil
+// truncateName shortens name so its visual width does not exceed maxWidth
+// terminal columns, accounting for double-width Unicode characters.
+func truncateName(name string, maxWidth int) string {
+	if runewidth.StringWidth(name) <= maxWidth {
+		return name
+	}
+	width := 0
+	for i, r := range name {
+		w := runewidth.RuneWidth(r)
+		if width+w > maxWidth {
+			return name[:i]
+		}
+		width += w
+	}
+	return name
+}
+
+// padWideRunes inserts a space after each double-width rune (CJK characters)
+// so that gocui's single-cell-per-rune renderer allocates two cells per wide
+// character, matching the two terminal columns the character actually occupies.
+// The inserted spaces are consumed as "continuation cells" by termbox's flush
+// loop and are never visible on screen.
+func padWideRunes(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		b.WriteRune(r)
+		if runewidth.RuneWidth(r) == 2 {
+			b.WriteByte(' ')
+		}
+	}
+	return b.String()
 }

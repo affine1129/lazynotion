@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/jroimartin/gocui"
 )
@@ -29,21 +31,76 @@ func SetKeyBindings(g *gocui.Gui) error {
 	if err := g.SetKeybinding("tree", 'e', gocui.ModNone, toggleEdit); err != nil {
 		log.Panicln(err)
 	}
-	// save in preview
-	if err := g.SetKeybinding("preview", gocui.KeyCtrlS, gocui.ModNone, savePreview); err != nil {
+	// scroll preview pane
+	if err := g.SetKeybinding("tree", 'J', gocui.ModNone, scrollPreviewDown); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("tree", 'K', gocui.ModNone, scrollPreviewUp); err != nil {
 		log.Panicln(err)
 	}
 	return nil
 }
 
-// toggleDB toggles the collapsed state of a Database node
+// toggleDB toggles the collapsed state of a Database node.
+// On the first expansion, pages are fetched asynchronously and a spinner
+// animation is shown while loading is in progress.
 func toggleDB(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex < 0 || selectedIndex >= len(treeNodes) {
 		return nil
 	}
 	node := treeNodes[selectedIndex]
 	if node.IsDB {
-		mockDBs[node.DBIdx].Collapsed = !mockDBs[node.DBIdx].Collapsed
+		d := GetDatabase()
+		db := &d[node.DBIdx]
+		if db.Collapsed && !db.PagesLoaded && !db.Loading {
+			// Start async page loading with spinner animation.
+			dbIdx := node.DBIdx
+			dbID := db.ID
+			db.Loading = true
+			db.Collapsed = false
+			go func() {
+				stopSpinner := make(chan struct{})
+				// Advance the spinner frame at regular intervals.
+				go func() {
+					ticker := time.NewTicker(150 * time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-ticker.C:
+							g.Update(func(*gocui.Gui) error {
+								spinnerFrame++
+								return nil
+							})
+						case <-stopSpinner:
+							return
+						}
+					}
+				}()
+
+				pages, err := FetchPages(GetClient(), dbID)
+				close(stopSpinner)
+
+				g.Update(func(*gocui.Gui) error {
+					d := GetDatabase()
+					if dbIdx >= len(d) {
+						return nil
+					}
+					db := &d[dbIdx]
+					db.Loading = false
+					if err != nil {
+						// Restore collapsed state so the user can retry.
+						db.Collapsed = true
+						log.Printf("failed to load pages for database %s: %v", dbID, err)
+						return nil
+					}
+					db.Pages = pages
+					db.PagesLoaded = true
+					return nil
+				})
+			}()
+		} else if !db.Loading {
+			db.Collapsed = !db.Collapsed
+		}
 	}
 	return nil
 }
@@ -51,6 +108,7 @@ func toggleDB(g *gocui.Gui, v *gocui.View) error {
 func cursorDown(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex < len(treeNodes)-1 {
 		selectedIndex++
+		previewOriginY = 0
 	}
 	return nil
 }
@@ -58,6 +116,7 @@ func cursorDown(g *gocui.Gui, v *gocui.View) error {
 func cursorUp(g *gocui.Gui, v *gocui.View) error {
 	if selectedIndex > 0 {
 		selectedIndex--
+		previewOriginY = 0
 	}
 	return nil
 }
@@ -67,13 +126,67 @@ func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 
-// toggleEdit opens the selected page in Neovim for editing
+// previewMaxOriginY returns the maximum scroll offset for the preview pane.
+func previewMaxOriginY(p *gocui.View) int {
+	_, pvHeight := p.Size()
+	totalLines := len(p.BufferLines())
+	max := totalLines - pvHeight
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func scrollPreviewDown(g *gocui.Gui, v *gocui.View) error {
+	p, err := g.View("preview")
+	if err != nil {
+		return nil
+	}
+	if previewOriginY < previewMaxOriginY(p) {
+		previewOriginY++
+		p.SetOrigin(0, previewOriginY)
+	}
+	return nil
+}
+
+func scrollPreviewUp(g *gocui.Gui, v *gocui.View) error {
+	if previewOriginY > 0 {
+		previewOriginY--
+		p, err := g.View("preview")
+		if err != nil {
+			return nil
+		}
+		p.SetOrigin(0, previewOriginY)
+	}
+	return nil
+}
+
+func pickEditor() (string, error) {
+	if _, err := exec.LookPath("nvim"); err == nil {
+		return "nvim", nil
+	}
+	if _, err := exec.LookPath("vim"); err == nil {
+		return "vim", nil
+	}
+	if _, err := exec.LookPath("vi"); err == nil {
+		return "vi", nil
+	}
+	return "", fmt.Errorf("no supported editor found: install nvim, vim, or vi")
+}
+
+// toggleEdit opens the selected page in the configured editor.
 func toggleEdit(g *gocui.Gui, v *gocui.View) error {
+	if len(treeNodes) == 0 || selectedIndex < 0 || selectedIndex >= len(treeNodes) {
+		return nil
+	}
 	n := treeNodes[selectedIndex]
 	d := GetDatabase()
 
 	if n.IsDB {
 		return nil
+	}
+	if err := LoadPageContent(GetClient(), &d[n.DBIdx].Pages[n.PageIdx]); err != nil {
+		return err
 	}
 	// get pointer to the page
 	pg := &d[n.DBIdx].Pages[n.PageIdx]
@@ -90,8 +203,13 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 	// close GUI to return to terminal
 	g.Close()
 
-	// launch Neovim
-	cmd := exec.Command("nvim", tmpName)
+	editor, err := pickEditor()
+	if err != nil {
+		return err
+	}
+
+	// launch editor
+	cmd := exec.Command(editor, tmpName)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -112,6 +230,14 @@ func toggleEdit(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	pg.Content = string(data)
+
+	// Notion API でページコンテンツを更新 (replace-content)
+	if pg.ID != "" {
+		client := GetClient()
+		if err := UpdatePageMarkdown(client, pg.ID, pg.Content); err != nil {
+			log.Printf("failed to update page markdown for page %s: %v", pg.ID, err)
+		}
+	}
 
 	g.SetCurrentView("tree")
 	return nil

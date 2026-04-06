@@ -1,5 +1,7 @@
 package main
 
+import "github.com/jomei/notionapi"
+
 var databases []Database
 
 type Block struct {
@@ -21,30 +23,37 @@ func NewBlock(id, blockType, content string) Block {
 }
 
 type Page struct {
+	ID     notionapi.PageID
 	Name   string
 	Blocks []Block
 	// for preview
-	Content string
+	Content       string
+	ContentLoaded bool
 }
 
 func NewPage(name string, blocks []Block) Page {
 	return Page{
-		Name:   name,
-		Blocks: blocks,
+		Name:          name,
+		Blocks:        blocks,
+		ContentLoaded: true,
 	}
 }
 
 type Database struct {
-	Name      string
-	Pages     []Page
-	Collapsed bool
+	ID          notionapi.DatabaseID
+	Name        string
+	Pages       []Page
+	Collapsed   bool
+	PagesLoaded bool
+	Loading     bool // true while pages are being fetched for the first time
 }
 
 func NewDatabase(name string, pages []Page, collapsed bool) Database {
 	return Database{
-		Name:      name,
-		Pages:     pages,
-		Collapsed: collapsed,
+		Name:        name,
+		Pages:       pages,
+		Collapsed:   collapsed,
+		PagesLoaded: true,
 	}
 }
 
